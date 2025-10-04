@@ -2,6 +2,18 @@ require('dotenv').config();
 const { Client, GatewayIntentBits, Partials, SlashCommandBuilder, REST, Routes, PermissionFlagsBits } = require("discord.js");
 const fs = require("fs");
 
+// ===== WEB SERVICE =====
+
+const express = require('express');
+const app = express();
+const port = process.env.PORT || 3000;
+
+app.get('/', (req, res) => res.send('Bot Leca está online!'));
+
+app.listen(port, () => {
+  console.log(`Servidor rodando na porta ${port}`);
+});
+
 // ===== CONFIGURAÇÕES =====
 const TOKEN = process.env.TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
