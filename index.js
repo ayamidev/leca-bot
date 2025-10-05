@@ -1,10 +1,8 @@
-// index.js
 import Discord from "discord.js";
 import express from "express";
 import dotenv from "dotenv";
 
 const { Client, GatewayIntentBits, Partials, MessageEmbed } = Discord;
-
 dotenv.config();
 
 // === CLIENTE DISCORD ===
@@ -26,7 +24,7 @@ const app = express();
 app.get("/", (_, res) => res.send("💖 Leca está online!"));
 app.listen(process.env.PORT || 3000, () => console.log("🌐 Servidor HTTP ativo!"));
 
-// === FUNÇÃO: HORÁRIO BRASIL ===
+// === HORÁRIO BRASIL ===
 function horaBrasilia() {
   return new Date().toLocaleString("pt-BR", {
     timeZone: "America/Sao_Paulo",
@@ -34,12 +32,12 @@ function horaBrasilia() {
   });
 }
 
-// === EVENTO: BOT PRONTO ===
+// === EVENTO PRONTO ===
 client.once("ready", () => {
   console.log(`🤖 Leca conectada como ${client.user.tag}`);
 });
 
-// === COMANDOS SIMPLES /setlog ===
+// === COMANDO SIMPLES /setlog ===
 client.on("messageCreate", async (message) => {
   if (!message.content.startsWith("!setlog") || !message.member.hasPermission("ADMINISTRATOR")) return;
   LOG_CHANNEL_ID = message.channel.id;
@@ -68,7 +66,6 @@ async function registrarLog(message, conteudo, arquivos) {
 async function repostarAnonimamente(message) {
   if (message.author.bot) return;
 
-  // Detecta menções
   const mentionedBot = message.mentions.has(client.user);
   const mentionedEveryone = message.mentions.everyone;
   const mentionedHere = message.content.includes("@here");
@@ -76,25 +73,18 @@ async function repostarAnonimamente(message) {
   if (!mentionedBot) return;
   if (!mentionedBot && (mentionedEveryone || mentionedHere)) return;
 
-  // Remove apenas a menção ao bot
   const cleanContent = message.content.replace(new RegExp(`<@!?${client.user.id}>`, "g"), "").trim();
-
   const files = message.attachments.map(a => a.url);
   if (!cleanContent && files.length === 0) return;
 
-  // Captura mensagem respondida, se houver
   let replyTo = null;
   if (message.reference) {
     replyTo = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
   }
 
-  // Apaga a mensagem original
   await message.delete().catch(() => {});
-
-  // Cria embed se houver texto
   const embed = cleanContent ? new MessageEmbed().setDescription(cleanContent) : null;
 
-  // Envia repost anônimo
   await message.channel.send({
     content: "sua mensagem foi escondida 💕",
     embed: embed || undefined,
@@ -102,7 +92,6 @@ async function repostarAnonimamente(message) {
     reply: replyTo ? { messageReference: replyTo.id } : undefined,
   });
 
-  // Registra log
   await registrarLog(message, cleanContent, files);
 }
 
