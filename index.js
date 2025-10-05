@@ -166,7 +166,6 @@ client.on("messageCreate", async (message) => {
 });
 
 // --- Monitoramento quando a Leca apaga mensagens ---
-// --- Monitoramento quando a Leca apaga mensagens ---
 client.on("messageDelete", async (deletedMessage) => {
   try {
     // Só reage se foi o próprio bot quem apagou
@@ -177,26 +176,9 @@ client.on("messageDelete", async (deletedMessage) => {
     const monitorChannel = deletedMessage.guild.channels.cache.get(defaultLogChannelId);
     if (!monitorChannel) return;
 
-    // Aguarda uma mensagem contendo "Mensagem de texto deletada" (em texto ou embed)
+    // Aguarda uma mensagem contendo "Mensagem de texto deletada"
     const collector = monitorChannel.createMessageCollector({
-      filter: msg => {
-        if (msg.author.bot && msg.author.id !== client.user.id) return false;
-
-        // verifica se o conteúdo contém o texto
-        const inContent = msg.content && msg.content.includes("Mensagem de texto deletada");
-
-        // verifica se está em algum embed
-        const inEmbeds = msg.embeds?.some(e =>
-          (e.title && e.title.includes("Mensagem de texto deletada")) ||
-          (e.description && e.description.includes("Mensagem de texto deletada")) ||
-          (e.fields && e.fields.some(f =>
-            f.name.includes("Mensagem de texto deletada") ||
-            f.value.includes("Mensagem de texto deletada")
-          ))
-        );
-
-        return inContent || inEmbeds;
-      },
+      filter: msg => msg.content.includes("Mensagem de texto deletada"),
       time: 15000, // aguarda até 15 segundos
       max: 1
     });
