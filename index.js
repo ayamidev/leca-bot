@@ -1,8 +1,9 @@
-const { Client, GatewayIntentBits, Partials, EmbedBuilder } = require("discord.js");
+const { Client, GatewayIntentBits, Partials, EmbedBuilder, AttachmentBuilder } = require("discord.js");
 require("dotenv").config();
 const express = require("express");
 
 const TOKEN = process.env.TOKEN;
+const BOT_NAME = "leca"; // Nome do bot para detectar menção direta
 let logChannelId = null;
 
 const client = new Client({
@@ -29,7 +30,7 @@ function horaBrasilia() {
 }
 
 // --- Bot pronto ---
-client.once("clientReady", () => {
+client.once("ready", () => {
   console.log(`✅ Logado como ${client.user.tag}`);
 });
 
@@ -53,55 +54,52 @@ client.on("messageCreate", async (message) => {
   // ignora respostas a mensagens do próprio bot
   if (message.reference) {
     const ref = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
-    if (ref && ref.author.id === client.user.id) return; // ignora apenas se for resposta ao bot
+    if (ref && ref.author.id === client.user.id) return;
   }
 
-  // Substitui apenas a menção ao próprio bot
-  const cleanContent = message.content.replace(new RegExp(`<@!?${client.user.id}>`, "g"), "").trim();
+  const contentLower = message.content.toLowerCase();
+  if (!contentLower.includes(`@${BOT_NAME}`)) return; // só reage se mencionar "@leca"
 
-  const files = message.attachments.map(a => a.url);
+  // remove a menção do conteúdo
+  const cleanContent = message.content.replace(new RegExp(`@${BOT_NAME}`, "gi"), "").trim();
 
-  const apenasMencaoEAnexo =
-    message.mentions.has(client.user) && !cleanContent && files.length > 0;
-  const apenasMencaoSemAnexo =
-    message.mentions.has(client.user) && !cleanContent && files.length === 0;
+  // converte anexos para AttachmentBuilder
+  const files = message.attachments.map(a => new AttachmentBuilder(a.url, { name: a.name }));
 
-  if (apenasMencaoSemAnexo) return;
+  if (!cleanContent && files.length === 0) return; // nada a fazer
 
-  if (message.mentions.has(client.user)) {
-    await message.delete().catch(() => {});
+  await message.delete().catch(() => {});
 
-    if (cleanContent) {
-      const embed = new EmbedBuilder().setDescription(cleanContent);
-      await message.channel.send({
-        content: "sua mensagem foi escondida 💕",
+  if (cleanContent) {
+    const embed = new EmbedBuilder().setDescription(cleanContent);
+    await message.channel.send({
+      content: "sua mensagem foi escondida 💕",
+      embeds: [embed],
+      files: files.length > 0 ? files : undefined
+    });
+  } else {
+    await message.channel.send({
+      content: "sua mensagem foi escondida 💕",
+      files
+    });
+  }
+
+  // log no canal definido
+  if (logChannelId) {
+    const logChannel = message.guild.channels.cache.get(logChannelId);
+    if (logChannel) {
+      const descricao = cleanContent || "* (postagem sem descrição)*";
+      const embed = new EmbedBuilder()
+        .setDescription(`**mensagem:** ${descricao}`)
+        .setFooter({
+          text: `publicado por: ${message.author.tag} | (${message.author.id})\nem: #${message.channel.name} | ${horaBrasilia()}`
+        });
+
+      await logChannel.send({
+        content: "Registro de Auditoria 💕",
         embeds: [embed],
         files: files.length > 0 ? files : undefined
       });
-    } else {
-      await message.channel.send({
-        content: "sua mensagem foi escondida 💕",
-        files
-      });
-    }
-
-    if (logChannelId) {
-      const logChannel = message.guild.channels.cache.get(logChannelId);
-      if (logChannel) {
-        const descricao = cleanContent || "* (postagem sem descrição)*";
-
-        const embed = new EmbedBuilder()
-          .setDescription(`**mensagem:** ${descricao}`)
-          .setFooter({
-            text: `publicado por: ${message.author.tag} | (${message.author.id})\nem: #${message.channel.name} | ${horaBrasilia()}`
-          });
-
-        await logChannel.send({
-          content: "Registro de Auditoria 💕",
-          embeds: [embed],
-          files: files.length > 0 ? files : undefined
-        });
-      }
     }
   }
 });
