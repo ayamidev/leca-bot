@@ -99,6 +99,7 @@ async function registrarLog(message, conteudo, arquivos) {
 
   const horario = horaBrasilia();
   const embed = new EmbedBuilder()
+    .setColor("LuminousVividPink")
     .setDescription(`**mensagem:** ${conteudo || "_(postagem sem descrição)_"}`)
     .setFooter({
       text: `publicado por: ${message.author.tag} | (${message.author.id})\nem: #${message.channel.name} | ${horario}`,
@@ -148,18 +149,16 @@ client.on("messageCreate", async (message) => {
 
   await message.delete().catch(() => {});
 
-  if (cleanContent) {
-    await message.channel.send({
-      content: cleanContent,
-      files: files.length > 0 ? files : undefined,
-      reply: replyTo ? { messageReference: replyTo.id } : undefined,
-    });
-  } else {
-    await message.channel.send({
-      files: files,
-      reply: replyTo ? { messageReference: replyTo.id } : undefined,
-    });
-  }
+  const embed = new EmbedBuilder()
+    .setColor("LuminousVividPink")
+    .setDescription(cleanContent || "_(mensagem sem texto)_")
+    .setFooter({ text: "💬 Sua mensagem foi escondida 💕" });
+
+  await message.channel.send({
+    embeds: [embed],
+    files: files.length > 0 ? files : undefined,
+    reply: replyTo ? { messageReference: replyTo.id } : undefined,
+  });
 
   await registrarLog(message, cleanContent, files);
 });
