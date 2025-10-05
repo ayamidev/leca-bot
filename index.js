@@ -1,7 +1,9 @@
 // index.js
-import { Client, GatewayIntentBits, Partials, MessageEmbed } from "discord.js";
+import Discord from "discord.js";
 import express from "express";
 import dotenv from "dotenv";
+
+const { Client, GatewayIntentBits, Partials, MessageEmbed } = Discord;
 
 dotenv.config();
 
