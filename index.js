@@ -1,109 +1,128 @@
-const { Client, GatewayIntentBits, Partials, EmbedBuilder } = require("discord.js");
-require("dotenv").config();
-const express = require("express");
+// index.js
+import {
+  Client,
+  GatewayIntentBits,
+  EmbedBuilder,
+  Partials,
+} from "discord.js";
+import express from "express";
 
-const TOKEN = process.env.TOKEN;
-let logChannelId = null;
+// === CONFIGURAÇÃO DO SERVIDOR WEB (para manter online) ===
+const app = express();
+app.get("/", (req, res) => res.send("Leca está viva 💫"));
+app.listen(process.env.PORT || 3000, () => console.log("🌐 Web service ativo!"));
 
+// === CONFIGURAÇÃO DO CLIENTE DISCORD ===
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
+    GatewayIntentBits.MessageContent,
   ],
-  partials: [Partials.Message, Partials.Channel]
+  partials: [Partials.Message, Partials.Channel, Partials.Reaction],
 });
 
-// --- Web server mínimo para Render ---
-const app = express();
-const port = process.env.PORT || 3000;
-app.get("/", (req, res) => res.send("Bot Leca está online! 💕"));
-app.listen(port, () => console.log(`Servidor HTTP ativo na porta ${port}`));
+const TOKEN = process.env.TOKEN;
+const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID; // canal de log
 
-// --- Função pra horário de Brasília ---
-function horaBrasilia() {
-  return new Date().toLocaleString("pt-BR", {
+// === FUNÇÃO DE FORMATAÇÃO DE DATA/HORA ===
+function formatarHorarioBrasilia() {
+  const agora = new Date();
+  const opcoes = {
     timeZone: "America/Sao_Paulo",
-    hour12: false
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  };
+  return agora.toLocaleString("pt-BR", opcoes);
+}
+
+// === FUNÇÃO DE LOG ===
+async function registrarLog(message, conteudo, arquivos) {
+  const canalLog = await client.channels.fetch(LOG_CHANNEL_ID).catch(() => null);
+  if (!canalLog) return;
+
+  const horario = formatarHorarioBrasilia();
+
+  const embed = new EmbedBuilder()
+    .setTitle("📨 Mensagem Anônima Enviada")
+    .setColor("#9b59b6")
+    .addFields(
+      { name: "👤 Autor", value: `${message.author.tag}`, inline: false },
+      { name: "🕒 Horário", value: horario, inline: true },
+      {
+        name: "💬 Conteúdo",
+        value: conteudo || "(sem texto)",
+        inline: false,
+      }
+    )
+    .setFooter({ text: `Canal: #${message.channel.name}` })
+    .setTimestamp();
+
+  await canalLog.send({
+    embeds: [embed],
+    files: arquivos.length > 0 ? arquivos : undefined,
   });
 }
 
-// --- Bot pronto ---
-client.once("clientReady", () => {
-  console.log(`✅ Logado como ${client.user.tag}`);
-});
-
-// --- Comando para definir canal de log ---
-client.on("interactionCreate", async (interaction) => {
-  if (!interaction.isCommand()) return;
-
-  if (interaction.commandName === "setlog") {
-    logChannelId = interaction.channel.id;
-    await interaction.reply({
-      content: "Canal de log definido com sucesso!",
-      ephemeral: true
-    });
-  }
-});
-
-// --- Repost anônimo ---
-client.on("messageCreate", async (message) => {
+// === FUNÇÃO PRINCIPAL DE REPOSTAGEM ANÔNIMA ===
+async function repostarAnonimamente(message) {
   if (message.author.bot) return;
 
-  // ignora respostas a mensagens do próprio bot
-  if (message.reference) {
-    const ref = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
-    if (ref && ref.author.id === client.user.id) return; // ignora apenas se for resposta ao bot
-  }
+  // Detecta menções
+  const mentionedBot = message.mentions.has(client.user);
+  const mentionedEveryone = message.mentions.everyone;
+  const mentionedHere = message.content.includes("@here");
 
-  // Substitui apenas a menção ao próprio bot
-  const cleanContent = message.content.replace(new RegExp(`<@!?${client.user.id}>`, "g"), "").trim();
+  // Só processa se o bot foi mencionado
+  if (!mentionedBot) return;
 
-  const files = message.attachments.map(a => a.url);
+  // Ignora mensagens que mencionam apenas @everyone ou @here sem o bot
+  if (!mentionedBot && (mentionedEveryone || mentionedHere)) return;
 
-  const apenasMencaoEAnexo =
-    message.mentions.has(client.user) && !cleanContent && files.length > 0;
-  const apenasMencaoSemAnexo =
-    message.mentions.has(client.user) && !cleanContent && files.length === 0;
+  // Remove apenas a menção ao bot (mantém outras menções)
+  const cleanContent = message.content
+    .replace(new RegExp(`<@!?${client.user.id}>`, "g"), "")
+    .trim();
 
+  const files = message.attachments.map((a) => a.url);
+  const apenasMencaoSemAnexo = mentionedBot && !cleanContent && files.length === 0;
   if (apenasMencaoSemAnexo) return;
 
-  if (message.mentions.has(client.user)) {
-    await message.delete().catch(() => {});
-
-    if (cleanContent) {
-      const embed = new EmbedBuilder().setDescription(cleanContent);
-      await message.channel.send({
-        content: "sua mensagem foi escondida 💕",
-        embeds: [embed],
-        files: files.length > 0 ? files : undefined
-      });
-    } else {
-      await message.channel.send({
-        content: "sua mensagem foi escondida 💕",
-        files
-      });
-    }
-
-    if (logChannelId) {
-      const logChannel = message.guild.channels.cache.get(logChannelId);
-      if (logChannel) {
-        const descricao = cleanContent || "* (postagem sem descrição)*";
-
-        const embed = new EmbedBuilder()
-          .setDescription(`**mensagem:** ${descricao}`)
-          .setFooter({
-            text: `publicado por: ${message.author.tag} | (${message.author.id})\nem: #${message.channel.name} | ${horaBrasilia()}`
-          });
-
-        await logChannel.send({
-          content: "Registro de Auditoria 💕",
-          embeds: [embed],
-          files: files.length > 0 ? files : undefined
-        });
-      }
-    }
+  // Captura mensagem respondida, se existir
+  let replyTo = null;
+  if (message.reference) {
+    replyTo = await message.channel.messages
+      .fetch(message.reference.messageId)
+      .catch(() => null);
   }
+
+  // Remove a mensagem original
+  await message.delete().catch(() => {});
+
+  // Cria embed, se houver texto
+  const embed = cleanContent
+    ? new EmbedBuilder().setDescription(cleanContent).setColor("#dcd6f7")
+    : null;
+
+  // Envia a mensagem anônima
+  await message.channel.send({
+    embeds: embed ? [embed] : undefined,
+    files: files.length > 0 ? files : undefined,
+    reply: replyTo ? { messageReference: replyTo.id } : undefined,
+  });
+
+  // Loga o envio
+  await registrarLog(message, cleanContent, files);
+}
+
+// === EVENTOS DO CLIENTE ===
+client.on("ready", () => {
+  console.log(`🤖 Leca conectada como ${client.user.tag}`);
 });
 
+client.on("messageCreate", repostarAnonimamente);
+
+// === LOGIN ===
 client.login(TOKEN);
