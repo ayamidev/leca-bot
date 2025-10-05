@@ -74,25 +74,28 @@ async function repostarAnonimamente(message) {
   const mentionedEveryone = message.mentions.everyone;
   const mentionedHere = message.content.includes("@here");
 
-  // Detecta se é reply a mensagem da Leca
-  let isReplyToLeca = false;
+  // Ignora @everyone/@here sozinho
+  if ((mentionedEveryone || mentionedHere) && !mentionedBot) return;
+
+  // Detecta se é reply à Leca
   let replyTo = null;
+  let isReplyToLeca = false;
   if (message.reference) {
     replyTo = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
     if (replyTo?.author?.id === client.user.id) isReplyToLeca = true;
   }
 
-  // Verifica se o conteúdo menciona o bot explicitamente
+  // Verifica se o conteúdo menciona explicitamente o bot
   const contentMentionsBot =
     message.content.includes(`<@!${client.user.id}>`) ||
     message.content.includes(`<@${client.user.id}>`);
 
   // Regras de acionamento:
-  // - Mensagem menciona o bot (sozinho ou com @everyone/@here)
-  // - Reply à Leca que contém @leca
+  // - Menção direta ao bot
+  // - Reply à Leca que menciona o bot
   if (!mentionedBot && !(isReplyToLeca && contentMentionsBot)) return;
 
-  // Remove menção ao bot do conteúdo
+  // Remove menção do bot do texto
   const cleanContent = message.content.replace(new RegExp(`<@!?${client.user.id}>`, "g"), "").trim();
 
   // Anexos
@@ -100,10 +103,10 @@ async function repostarAnonimamente(message) {
     a => new AttachmentBuilder(a.url, { name: a.name })
   );
 
-  // Não repostar se não houver texto nem anexos
+  // Não repostar se não houver conteúdo nem anexos
   if (!cleanContent && files.length === 0) return;
 
-  // Deleta a mensagem original
+  // Deleta mensagem original
   await message.delete().catch(() => {});
 
   // Cria embed apenas se houver texto
