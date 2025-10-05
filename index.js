@@ -1,22 +1,23 @@
-import Discord, { Client, GatewayIntentBits, Partials, EmbedBuilder, AttachmentBuilder } from "discord.js";
+import Discord from "discord.js";
 import express from "express";
 import dotenv from "dotenv";
 
 dotenv.config();
+const { Client, GatewayIntentBits, Partials, EmbedBuilder, PermissionsBitField, REST, Routes, SlashCommandBuilder } = Discord;
 
-// === CLIENTE DISCORD ===
+const TOKEN = process.env.TOKEN;
+const CLIENT_ID = process.env.CLIENT_ID;
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.MessageContent
   ],
   partials: [Partials.Message, Partials.Channel, Partials.Reaction],
 });
 
-// === VARIÁVEIS ===
-const TOKEN = process.env.TOKEN;
-let LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID || null;
+let LOG_CHANNEL_ID = null;
 
 // === WEBSERVER PARA MANTER ONLINE ===
 const app = express();
@@ -31,19 +32,38 @@ function horaBrasilia() {
   });
 }
 
-// === EVENTO PRONTO ===
-client.once("clientReady", () => {
+// === REGISTRA COMANDO /setlog AUTOMATICAMENTE ===
+client.once("ready", async () => {
+  console.log(`✅ Login bem-sucedido!`);
   console.log(`🤖 Leca conectada como ${client.user.tag}`);
-  console.log("Servidores:", client.guilds.cache.map(g => g.name).join(", "));
+  console.log(`Servidores: ${client.guilds.cache.map(g => g.name).join(", ")}`);
+
+  const commands = [
+    new SlashCommandBuilder()
+      .setName("setlog")
+      .setDescription("Define o canal atual como o canal de logs.")
+      .toJSON(),
+  ];
+
+  const rest = new REST({ version: "10" }).setToken(TOKEN);
+  try {
+    await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
+    console.log("💾 Comando /setlog registrado com sucesso!");
+  } catch (error) {
+    console.error("Erro ao registrar comandos:", error);
+  }
 });
 
-// === COMANDO SIMPLES /setlog ===
-client.on("messageCreate", async (message) => {
-  if (!message.content.startsWith("!setlog")) return;
-  if (!message.member || !message.member.permissions.has("Administrator")) return;
-
-  LOG_CHANNEL_ID = message.channel.id;
-  await message.reply("Canal de log definido com sucesso!");
+// === TRATA O COMANDO /setlog ===
+client.on("interactionCreate", async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
+  if (interaction.commandName === "setlog") {
+    if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+      return interaction.reply({ content: "❌ Você não tem permissão para definir o canal de log!", ephemeral: true });
+    }
+    LOG_CHANNEL_ID = interaction.channel.id;
+    await interaction.reply({ content: "✅ Canal de log definido com sucesso!", ephemeral: true });
+  }
 });
 
 // === FUNÇÃO DE LOG ===
@@ -55,12 +75,9 @@ async function registrarLog(message, conteudo, arquivos) {
   const horario = horaBrasilia();
   const embed = new EmbedBuilder()
     .setDescription(`**mensagem:** ${conteudo || "_(postagem sem descrição)_"}`)
-    .setFooter({
-      text: `publicado por: ${message.author.tag} | (${message.author.id})\nem: #${message.channel.name} | ${horario}`
-    });
+    .setFooter({ text: `publicado por: ${message.author.tag} | (${message.author.id})\nem: #${message.channel.name} | ${horario}` });
 
   await canalLog.send({
-    content: "Registro de Auditoria 💕",
     embeds: [embed],
     files: arquivos.length > 0 ? arquivos : undefined,
   });
@@ -74,61 +91,31 @@ async function repostarAnonimamente(message) {
   const mentionedEveryone = message.mentions.everyone;
   const mentionedHere = message.content.includes("@here");
 
-  // Ignora @everyone/@here sozinho
-  if ((mentionedEveryone || mentionedHere) && !mentionedBot) return;
+  // Ignora mensagens que não mencionam o bot
+  if (!mentionedBot) return;
 
-  // Detecta se é reply à Leca
-  let replyTo = null;
-  let isReplyToLeca = false;
+  // Ignora mensagens que são só @everyone ou @here
+  if (!mentionedBot && (mentionedEveryone || mentionedHere)) return;
+
+  // Se for resposta à Leca, só reage se tiver @leca no texto
   if (message.reference) {
-    replyTo = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
-    if (replyTo?.author?.id === client.user.id) isReplyToLeca = true;
+    const replied = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
+    if (replied && replied.author.id === client.user.id && !mentionedBot) return;
   }
 
-  // Verifica se o conteúdo menciona explicitamente o bot
-  const contentMentionsBot =
-    message.content.includes(`<@!${client.user.id}>`) ||
-    message.content.includes(`<@${client.user.id}>`);
-
-  // Regras de acionamento:
-  // - Menção direta ao bot
-  // - Reply à Leca que menciona o bot
-  if (!mentionedBot && !(isReplyToLeca && contentMentionsBot)) return;
-
-  // Remove menção do bot do texto
   const cleanContent = message.content.replace(new RegExp(`<@!?${client.user.id}>`, "g"), "").trim();
-
-  // Anexos
-  const files = Array.from(message.attachments.values()).map(
-    a => new AttachmentBuilder(a.url, { name: a.name })
-  );
-
-  // Não repostar se não houver conteúdo nem anexos
+  const files = message.attachments.map(a => a.url);
   if (!cleanContent && files.length === 0) return;
 
-  // Deleta mensagem original
   await message.delete().catch(() => {});
-
-  // Cria embed apenas se houver texto
-  const embed = cleanContent ? new EmbedBuilder().setDescription(cleanContent) : null;
-
-  await message.channel.send({
-    content: "sua mensagem foi escondida 💕",
-    embeds: embed ? [embed] : undefined,
+  const options = {
+    content: cleanContent || undefined,
     files: files.length > 0 ? files : undefined,
-    reply: replyTo ? { messageReference: replyTo.id } : undefined,
-  });
+  };
 
-  // Registra log
+  await message.channel.send(options);
   await registrarLog(message, cleanContent, files);
-
-  console.log(
-    `[${horaBrasilia()}] Mensagem repostada anonimamente no canal ${message.channel.name}`
-  );
 }
 
-// === EVENTO: NOVA MENSAGEM ===
 client.on("messageCreate", repostarAnonimamente);
-
-// === LOGIN ===
-client.login(TOKEN).then(() => console.log("✅ Login bem-sucedido!"));
+client.login(TOKEN);
