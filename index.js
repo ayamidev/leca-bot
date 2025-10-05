@@ -1,11 +1,11 @@
 // index.js
-import { Client, GatewayIntentBits, Partials, EmbedBuilder, InteractionResponseFlags } from "discord.js";
+import { Client, GatewayIntentBits, Partials, MessageEmbed } from "discord.js";
 import express from "express";
 import dotenv from "dotenv";
 
 dotenv.config();
 
-// === CONFIGURAÇÃO DO CLIENTE ===
+// === CLIENTE DISCORD ===
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -19,12 +19,12 @@ const client = new Client({
 const TOKEN = process.env.TOKEN;
 let LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID;
 
-// === WEBSERVER MÍNIMO (Render) ===
+// === WEBSERVER PARA MANTER ONLINE ===
 const app = express();
 app.get("/", (_, res) => res.send("💖 Leca está online!"));
 app.listen(process.env.PORT || 3000, () => console.log("🌐 Servidor HTTP ativo!"));
 
-// === UTILITÁRIO: HORÁRIO BRASIL ===
+// === FUNÇÃO: HORÁRIO BRASIL ===
 function horaBrasilia() {
   return new Date().toLocaleString("pt-BR", {
     timeZone: "America/Sao_Paulo",
@@ -33,21 +33,15 @@ function horaBrasilia() {
 }
 
 // === EVENTO: BOT PRONTO ===
-client.once("clientReady", () => {
+client.once("ready", () => {
   console.log(`🤖 Leca conectada como ${client.user.tag}`);
 });
 
-// === COMANDOS (exemplo /setlog) ===
-client.on("interactionCreate", async (interaction) => {
-  if (!interaction.isCommand()) return;
-
-  if (interaction.commandName === "setlog") {
-    LOG_CHANNEL_ID = interaction.channel.id;
-    await interaction.reply({
-      content: "Canal de log definido com sucesso!",
-      flags: InteractionResponseFlags.Ephemeral
-    });
-  }
+// === COMANDOS SIMPLES /setlog ===
+client.on("messageCreate", async (message) => {
+  if (!message.content.startsWith("!setlog") || !message.member.hasPermission("ADMINISTRATOR")) return;
+  LOG_CHANNEL_ID = message.channel.id;
+  message.reply("Canal de log definido com sucesso!");
 });
 
 // === FUNÇÃO DE LOG ===
@@ -57,15 +51,13 @@ async function registrarLog(message, conteudo, arquivos) {
   if (!canalLog) return;
 
   const horario = horaBrasilia();
-  const embed = new EmbedBuilder()
-    .setDescription(`**mensagem:** ${conteudo || "* (postagem sem descrição)*"}`)
-    .setFooter({
-      text: `publicado por: ${message.author.tag} | (${message.author.id})\nem: #${message.channel.name} | ${horario}`,
-    });
+  const embed = new MessageEmbed()
+    .setDescription(`**mensagem:** ${conteudo || "_(postagem sem descrição)_"}`)
+    .setFooter(`publicado por: ${message.author.tag} | (${message.author.id})\nem: #${message.channel.name} | ${horario}`);
 
   await canalLog.send({
     content: "Registro de Auditoria 💕",
-    embeds: [embed],
+    embed: embed,
     files: arquivos.length > 0 ? arquivos : undefined,
   });
 }
@@ -74,42 +66,41 @@ async function registrarLog(message, conteudo, arquivos) {
 async function repostarAnonimamente(message) {
   if (message.author.bot) return;
 
-  // detecta menções
+  // Detecta menções
   const mentionedBot = message.mentions.has(client.user);
   const mentionedEveryone = message.mentions.everyone;
   const mentionedHere = message.content.includes("@here");
 
-  // ignora se não houver menção direta ao bot
   if (!mentionedBot) return;
   if (!mentionedBot && (mentionedEveryone || mentionedHere)) return;
 
-  // remove apenas a menção ao bot, mantendo outras menções
+  // Remove apenas a menção ao bot
   const cleanContent = message.content.replace(new RegExp(`<@!?${client.user.id}>`, "g"), "").trim();
 
   const files = message.attachments.map(a => a.url);
   if (!cleanContent && files.length === 0) return;
 
-  // captura resposta original
+  // Captura mensagem respondida, se houver
   let replyTo = null;
   if (message.reference) {
     replyTo = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
   }
 
-  // apaga a mensagem original
+  // Apaga a mensagem original
   await message.delete().catch(() => {});
 
-  // cria embed se houver texto
-  const embed = cleanContent ? new EmbedBuilder().setDescription(cleanContent) : null;
+  // Cria embed se houver texto
+  const embed = cleanContent ? new MessageEmbed().setDescription(cleanContent) : null;
 
-  // envia repost anônimo
+  // Envia repost anônimo
   await message.channel.send({
     content: "sua mensagem foi escondida 💕",
-    embeds: embed ? [embed] : undefined,
+    embed: embed || undefined,
     files: files.length > 0 ? files : undefined,
     reply: replyTo ? { messageReference: replyTo.id } : undefined,
   });
 
-  // registra log
+  // Registra log
   await registrarLog(message, cleanContent, files);
 }
 
