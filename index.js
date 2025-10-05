@@ -1,6 +1,8 @@
-const { Client, GatewayIntentBits, Partials, EmbedBuilder, AttachmentBuilder } = require("discord.js");
-require("dotenv").config();
-const express = require("express");
+import { Client, GatewayIntentBits, Partials, EmbedBuilder, AttachmentBuilder } from "discord.js";
+import dotenv from "dotenv";
+import express from "express";
+
+dotenv.config();
 
 const TOKEN = process.env.TOKEN;
 let logChannelId = null;
@@ -29,7 +31,7 @@ function horaBrasilia() {
 }
 
 // --- Bot pronto ---
-client.once("clientReady", () => {
+client.once("ready", () => {
   console.log(`✅ Logado como ${client.user.tag}`);
 });
 
@@ -50,16 +52,12 @@ client.on("interactionCreate", async (interaction) => {
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
 
-  // ignora respostas a mensagens do próprio bot
   if (message.reference) {
     const ref = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
     if (ref && ref.author.id === client.user.id) return;
   }
 
-  // Remove menção ao próprio bot
   const cleanContent = message.content.replace(new RegExp(`<@!?${client.user.id}>`, "g"), "").trim();
-
-  // Converte anexos para AttachmentBuilder
   const files = message.attachments.map(a => new AttachmentBuilder(a.url, { name: a.name }));
 
   const apenasMencaoEAnexo =
@@ -72,7 +70,6 @@ client.on("messageCreate", async (message) => {
   if (message.mentions.has(client.user)) {
     await message.delete().catch(() => {});
 
-    // Repost da mensagem no canal original
     if (cleanContent) {
       const embed = new EmbedBuilder().setDescription(cleanContent);
       await message.channel.send({
@@ -87,7 +84,6 @@ client.on("messageCreate", async (message) => {
       });
     }
 
-    // Registro no canal de log, se configurado
     if (logChannelId) {
       const logChannel = message.guild.channels.cache.get(logChannelId);
       if (logChannel) {
