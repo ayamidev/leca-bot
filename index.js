@@ -83,40 +83,50 @@ async function registrarLog(message, conteudo, arquivos) {
 async function repostarAnonimamente(message) {
   if (message.author.bot) return;
 
-  // Detecta menção ao bot e @everyone/@here
   const mentionedBot = message.mentions.has(client.user);
   const mentionedEveryone = message.mentions.everyone;
   const mentionedHere = message.content.includes("@here");
 
-  // Só processa se mencionou o bot, sozinho ou junto de everyone/here
-  if (!mentionedBot && !(mentionedBot && (mentionedEveryone || mentionedHere))) return;
+  // Checa se é reply a mensagem da Leca
+  let isReplyToLeca = false;
+  let replyTo = null;
+  if (message.reference) {
+    replyTo = await message.channel.messages
+      .fetch(message.reference.messageId)
+      .catch(() => null);
+    if (replyTo?.author?.id === client.user.id) {
+      isReplyToLeca = true;
+    }
+  }
+
+  // Só processa se:
+  // 1️⃣ Mencionou o bot diretamente, sozinho ou com @everyone/@here
+  // 2️⃣ É reply à Leca **e o conteúdo menciona @leca**
+  const contentMentionsBot = message.content.includes(`<@!${client.user.id}>`) || message.content.includes(`<@${client.user.id}>`);
+  if (
+    !mentionedBot &&
+    !(mentionedBot && (mentionedEveryone || mentionedHere)) &&
+    !(isReplyToLeca && contentMentionsBot)
+  ) {
+    return; // não processa
+  }
 
   // Remove menção ao bot do conteúdo
   const cleanContent = message.content
     .replace(new RegExp(`<@!?${client.user.id}>`, "g"), "")
     .trim();
 
-  // Pega anexos
   const files = Array.from(message.attachments.values()).map(a => a.url);
 
-  // Caso não tenha nem texto nem anexos, não repostar
+  // Não repostar se não houver texto nem anexos
   if (!cleanContent && files.length === 0) return;
-
-  // Detecta se é reply a outra mensagem
-  let replyTo = null;
-  if (message.reference) {
-    replyTo = await message.channel.messages
-      .fetch(message.reference.messageId)
-      .catch(() => null);
-  }
 
   // Deleta a mensagem original
   await message.delete().catch(() => {});
 
-  // Cria embed apenas se tiver texto
+  // Cria embed só se houver texto
   const embed = cleanContent ? new EmbedBuilder().setDescription(cleanContent) : null;
 
-  // Reposta no canal original
   await message.channel.send({
     content: "sua mensagem foi escondida 💕",
     embeds: embed ? [embed] : undefined,
@@ -124,7 +134,7 @@ async function repostarAnonimamente(message) {
     reply: replyTo ? { messageReference: replyTo.id } : undefined,
   });
 
-  // Registra log (se LOG_CHANNEL_ID definido)
+  // Registra log
   await registrarLog(message, cleanContent, files);
 
   console.log(
