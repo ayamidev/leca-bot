@@ -56,7 +56,9 @@ client.on("messageCreate", async (message) => {
     if (ref && ref.author.id === client.user.id) return; // ignora apenas se for resposta ao bot
   }
 
-  const cleanContent = message.content.replace(/<@!?(\d+)>/g, "").trim();
+  // Substitui apenas a menção ao próprio bot
+  const cleanContent = message.content.replace(new RegExp(`<@!?${client.user.id}>`, "g"), "").trim();
+
   const files = message.attachments.map(a => a.url);
 
   const apenasMencaoEAnexo =
