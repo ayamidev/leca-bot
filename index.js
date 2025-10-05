@@ -79,26 +79,41 @@ async function registrarLog(message, conteudo, arquivos) {
   });
 }
 
-// === FUNÇÃO PRINCIPAL: REPOST ANÔNIMO ===
 async function repostarAnonimamente(message) {
   if (message.author.bot) return;
 
+  // Detecta menção ao bot e @everyone/@here
   const mentionedBot = message.mentions.has(client.user);
   const mentionedEveryone = message.mentions.everyone;
   const mentionedHere = message.content.includes("@here");
 
-  if (!mentionedBot) return;
-  if (!mentionedBot && (mentionedEveryone || mentionedHere)) return;
+  // Só processa se mencionou o bot, sozinho ou junto de everyone/here
+  if (!mentionedBot && !(mentionedBot && (mentionedEveryone || mentionedHere))) return;
 
+  // Checa se é reply a mensagem da Leca → não processa
+  let isReplyToLeca = false;
+  if (message.reference) {
+    const repliedMessage = await message.channel.messages
+      .fetch(message.reference.messageId)
+      .catch(() => null);
+    if (repliedMessage?.author?.id === client.user.id) {
+      isReplyToLeca = true;
+    }
+  }
+  if (isReplyToLeca) return;
+
+  // Remove menção ao bot do conteúdo
   const cleanContent = message.content
     .replace(new RegExp(`<@!?${client.user.id}>`, "g"), "")
     .trim();
 
-  const files = Array.from(message.attachments.values()).map((a) => a.url);
+  // Pega anexos
+  const files = Array.from(message.attachments.values()).map(a => a.url);
 
-  // Caso não tenha texto nem anexos, não repostar
+  // Caso não tenha nem texto nem anexos, não repostar
   if (!cleanContent && files.length === 0) return;
 
+  // Detecta se é reply a outra mensagem (não da Leca)
   let replyTo = null;
   if (message.reference) {
     replyTo = await message.channel.messages
@@ -106,10 +121,13 @@ async function repostarAnonimamente(message) {
       .catch(() => null);
   }
 
+  // Deleta a mensagem original
   await message.delete().catch(() => {});
 
+  // Cria embed apenas se tiver texto
   const embed = cleanContent ? new EmbedBuilder().setDescription(cleanContent) : null;
 
+  // Reposta no canal original
   await message.channel.send({
     content: "sua mensagem foi escondida 💕",
     embeds: embed ? [embed] : undefined,
@@ -117,6 +135,7 @@ async function repostarAnonimamente(message) {
     reply: replyTo ? { messageReference: replyTo.id } : undefined,
   });
 
+  // Registra log (se LOG_CHANNEL_ID definido)
   await registrarLog(message, cleanContent, files);
 
   console.log(
