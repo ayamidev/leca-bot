@@ -1,5 +1,6 @@
 const { Client, GatewayIntentBits, Partials, EmbedBuilder } = require("discord.js");
 require("dotenv").config();
+const express = require("express");
 
 const TOKEN = process.env.TOKEN;
 let logChannelId = null;
@@ -13,12 +14,13 @@ const client = new Client({
   partials: [Partials.Message, Partials.Channel]
 });
 
-// Quando o bot estiver pronto
-client.once("clientReady", () => {
-  console.log(`✅ Logada como ${client.user.tag}`);
-});
+// --- Web server mínimo para Render ---
+const app = express();
+const port = process.env.PORT || 3000;
+app.get("/", (req, res) => res.send("Bot Leca está online! 💕"));
+app.listen(port, () => console.log(`Servidor HTTP ativo na porta ${port}`));
 
-// Função pra converter a hora pro fuso de Brasília
+// --- Função pra horário de Brasília ---
 function horaBrasilia() {
   return new Date().toLocaleString("pt-BR", {
     timeZone: "America/Sao_Paulo",
@@ -26,6 +28,12 @@ function horaBrasilia() {
   });
 }
 
+// --- Bot pronto ---
+client.once("clientReady", () => {
+  console.log(`✅ Logado como ${client.user.tag}`);
+});
+
+// --- Comando para definir canal de log ---
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isCommand()) return;
 
@@ -33,38 +41,31 @@ client.on("interactionCreate", async (interaction) => {
     logChannelId = interaction.channel.id;
     await interaction.reply({
       content: "Canal de log definido com sucesso!",
-      ephemeral: true // corrigido: substitui o antigo InteractionResponseFlags
+      ephemeral: true
     });
   }
 });
 
+// --- Repost anônimo ---
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
 
-  // ignora se a mensagem for uma resposta a outra (pra não esconder replies)
+  // ignora respostas a mensagens do próprio bot
   if (message.reference) return;
 
-  // limpa o conteúdo removendo @Leca
   const cleanContent = message.content.replace(/<@!?(\d+)>/g, "").trim();
-
-  // pega anexos
   const files = message.attachments.map(a => a.url);
 
-  // caso 1: mensagem só tem @bot e anexos
   const apenasMencaoEAnexo =
     message.mentions.has(client.user) && !cleanContent && files.length > 0;
-
-  // caso 2: mensagem só tem @bot e nenhum anexo → ignora
   const apenasMencaoSemAnexo =
     message.mentions.has(client.user) && !cleanContent && files.length === 0;
 
   if (apenasMencaoSemAnexo) return;
 
-  // se a mensagem mencionar o bot, repostar como anônima
   if (message.mentions.has(client.user)) {
     await message.delete().catch(() => {});
 
-    // se tiver texto, usa embed
     if (cleanContent) {
       const embed = new EmbedBuilder().setDescription(cleanContent);
       await message.channel.send({
@@ -73,19 +74,16 @@ client.on("messageCreate", async (message) => {
         files: files.length > 0 ? files : undefined
       });
     } else {
-      // se não tiver texto, apenas repostar os anexos
       await message.channel.send({
         content: "sua mensagem foi escondida 💕",
         files
       });
     }
 
-    // envia registro no canal de log
     if (logChannelId) {
       const logChannel = message.guild.channels.cache.get(logChannelId);
       if (logChannel) {
-        const descricao =
-          cleanContent || "* (postagem sem descrição)*";
+        const descricao = cleanContent || "* (postagem sem descrição)*";
 
         const embed = new EmbedBuilder()
           .setDescription(`**mensagem:** ${descricao}`)
