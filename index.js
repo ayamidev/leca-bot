@@ -1,15 +1,23 @@
 import { Client, GatewayIntentBits, Partials, EmbedBuilder, AttachmentBuilder } from "discord.js";
-import dotenv from "dotenv";
 import express from "express";
 
-dotenv.config(); // importante para dev local, no Render as variáveis vêm do dashboard
-
+// --- Variáveis de ambiente ---
 const TOKEN = process.env.TOKEN;
+const CLIENT_ID = process.env.CLIENT_ID;
+
 if (!TOKEN) {
   console.error("⚠️ TOKEN não definido! Verifique as variáveis de ambiente.");
   process.exit(1);
 }
 
+if (!CLIENT_ID) {
+  console.error("⚠️ CLIENT_ID não definido! Verifique as variáveis de ambiente.");
+  process.exit(1);
+}
+
+console.log("✅ Variáveis de ambiente carregadas corretamente.");
+
+// --- Cliente Discord ---
 let logChannelId = null;
 
 const client = new Client({
@@ -35,7 +43,7 @@ function horaBrasilia() {
   });
 }
 
-// --- Bot pronto ---
+// --- Evento ready ---
 client.once("ready", () => {
   console.log(`✅ Logado como ${client.user.tag}`);
 });
@@ -57,7 +65,6 @@ client.on("interactionCreate", async (interaction) => {
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
 
-  // Ignora respostas a mensagens do próprio bot
   if (message.reference) {
     const ref = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
     if (ref && ref.author.id === client.user.id) return;
@@ -113,4 +120,9 @@ client.on("messageCreate", async (message) => {
   }
 });
 
-client.login(TOKEN);
+// --- Login com catch de erros ---
+client.login(TOKEN).then(() => {
+  console.log("🔑 Tentativa de login enviada ao Discord...");
+}).catch(err => {
+  console.error("❌ Falha ao logar no Discord:", err);
+});
