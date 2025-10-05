@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import {
   Client,
   GatewayIntentBits,
@@ -11,6 +12,14 @@ import {
 import express from "express";
 import dotenv from "dotenv";
 dotenv.config();
+=======
+const { Client, GatewayIntentBits, Partials, EmbedBuilder, AttachmentBuilder } = require("discord.js");
+require("dotenv").config();
+const express = require("express");
+
+const TOKEN = process.env.TOKEN;
+let logChannelId = null;
+>>>>>>> rollback-estavel
 
 // === CONFIGURAÇÃO DO CLIENT ===
 const client = new Client({
@@ -89,6 +98,7 @@ client.on("interactionCreate", async (interaction) => {
   }
 });
 
+<<<<<<< HEAD
 // === FUNÇÃO DE LOG ===
 async function registrarLog(message, conteudo, arquivos) {
   if (!LOG_CHANNEL_ID) return;
@@ -113,6 +123,9 @@ async function registrarLog(message, conteudo, arquivos) {
 }
 
 // === REPOSTAGEM ANÔNIMA ===
+=======
+// --- Repost anônimo com anexos corrigidos ---
+>>>>>>> rollback-estavel
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
 
@@ -142,6 +155,7 @@ client.on("messageCreate", async (message) => {
 
   let replyTo = null;
   if (message.reference) {
+<<<<<<< HEAD
     replyTo = await message.channel.messages
       .fetch(message.reference.messageId)
       .catch(() => null);
@@ -153,6 +167,17 @@ client.on("messageCreate", async (message) => {
     .setColor("LuminousVividPink")
     .setDescription(cleanContent || "_(mensagem sem texto)_")
     .setFooter({ text: "💬 Sua mensagem foi escondida 💕" });
+=======
+    const ref = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
+    if (ref && ref.author.id === client.user.id) return;
+  }
+
+  // Remove menção ao próprio bot
+  const cleanContent = message.content.replace(new RegExp(`<@!?${client.user.id}>`, "g"), "").trim();
+
+  // Converte anexos para AttachmentBuilder
+  const files = message.attachments.map(a => new AttachmentBuilder(a.url, { name: a.name }));
+>>>>>>> rollback-estavel
 
   await message.channel.send({
     embeds: [embed],
@@ -160,7 +185,50 @@ client.on("messageCreate", async (message) => {
     reply: replyTo ? { messageReference: replyTo.id } : undefined,
   });
 
+<<<<<<< HEAD
   await registrarLog(message, cleanContent, files);
+=======
+  if (apenasMencaoSemAnexo) return;
+
+  if (message.mentions.has(client.user)) {
+    await message.delete().catch(() => {});
+
+    // Repost da mensagem no canal original
+    if (cleanContent) {
+      const embed = new EmbedBuilder().setDescription(cleanContent);
+      await message.channel.send({
+        content: "sua mensagem foi escondida 💕",
+        embeds: [embed],
+        files: files.length > 0 ? files : undefined
+      });
+    } else {
+      await message.channel.send({
+        content: "sua mensagem foi escondida 💕",
+        files
+      });
+    }
+
+    // Registro no canal de log, se configurado
+    if (logChannelId) {
+      const logChannel = message.guild.channels.cache.get(logChannelId);
+      if (logChannel) {
+        const descricao = cleanContent || "* (postagem sem descrição)*";
+
+        const embed = new EmbedBuilder()
+          .setDescription(`**mensagem:** ${descricao}`)
+          .setFooter({
+            text: `publicado por: ${message.author.tag} | (${message.author.id})\nem: #${message.channel.name} | ${horaBrasilia()}`
+          });
+
+        await logChannel.send({
+          content: "Registro de Auditoria 💕",
+          embeds: [embed],
+          files: files.length > 0 ? files : undefined
+        });
+      }
+    }
+  }
+>>>>>>> rollback-estavel
 });
 
 // === LOGIN ===
