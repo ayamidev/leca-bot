@@ -2,19 +2,21 @@ import Discord from "discord.js";
 import express from "express";
 import dotenv from "dotenv";
 
-const { Client, GatewayIntentBits, Partials, MessageEmbed } = Discord;
 dotenv.config();
 
-// === VARIÁVEIS ===
+const { Client, GatewayIntentBits, Partials, MessageEmbed } = Discord;
 const TOKEN = process.env.TOKEN;
-let LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID;
+const CLIENT_ID = process.env.CLIENT_ID || "N/A";
+
+console.log("TOKEN:", TOKEN);
+console.log("CLIENT_ID:", CLIENT_ID);
 
 // === CLIENTE DISCORD ===
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent, // ESSENCIAL
+    GatewayIntentBits.MessageContent,
   ],
   partials: [Partials.Message, Partials.Channel, Partials.Reaction],
 });
@@ -45,46 +47,12 @@ client.once("ready", () => {
   }
 });
 
-// === COMANDO SIMPLES !setlog ===
+// === EVENTO: NOVA MENSAGEM (EXEMPLO) ===
 client.on("messageCreate", async (message) => {
-  if (!message.content.startsWith("!setlog")) return;
-  if (!message.member || !message.member.permissions.has("Administrator"))
-    return;
-
-  LOG_CHANNEL_ID = message.channel.id;
-  message.reply("Canal de log definido com sucesso!");
-});
-
-// === FUNÇÃO DE LOG ===
-async function registrarLog(message, conteudo, arquivos) {
-  if (!LOG_CHANNEL_ID) return;
-  const canalLog = await message.guild.channels.fetch(LOG_CHANNEL_ID).catch(() => null);
-  if (!canalLog) return;
-
-  const horario = horaBrasilia();
-  const embed = new MessageEmbed()
-    .setDescription(`**mensagem:** ${conteudo || "_(postagem sem descrição)_"}`)
-    .setFooter(
-      `publicado por: ${message.author.tag} | (${message.author.id})\nem: #${message.channel.name} | ${horario}`
-    );
-
-  await canalLog.send({
-    content: "Registro de Auditoria 💕",
-    embeds: [embed],
-    files: arquivos.length > 0 ? arquivos : undefined,
-  });
-}
-
-// === FUNÇÃO PRINCIPAL: REPOST ANÔNIMO ===
-async function repostarAnonimamente(message) {
   if (message.author.bot) return;
 
   const mentionedBot = message.mentions.has(client.user);
-  const mentionedEveryone = message.mentions.everyone;
-  const mentionedHere = message.content.includes("@here");
-
   if (!mentionedBot) return;
-  if (!mentionedBot && (mentionedEveryone || mentionedHere)) return;
 
   const cleanContent = message.content
     .replace(new RegExp(`<@!?${client.user.id}>`, "g"), "")
@@ -92,7 +60,6 @@ async function repostarAnonimamente(message) {
 
   const files = Array.from(message.attachments.values()).map((a) => a.url);
 
-  // Caso não tenha texto nem anexos, não repostar
   if (!cleanContent && files.length === 0) return;
 
   let replyTo = null;
@@ -113,13 +80,13 @@ async function repostarAnonimamente(message) {
     reply: replyTo ? { messageReference: replyTo.id } : undefined,
   });
 
-  await registrarLog(message, cleanContent, files);
-}
-
-// === EVENTO: NOVA MENSAGEM ===
-client.on("messageCreate", repostarAnonimamente);
+  console.log(
+    `[${horaBrasilia()}] Mensagem repostada anonimamente no canal ${message.channel.name}`
+  );
+});
 
 // === LOGIN ===
-client.login(TOKEN).catch((err) => {
-  console.error("❌ Erro ao logar no Discord:", err);
-});
+client
+  .login(TOKEN)
+  .then(() => console.log("✅ Login bem-sucedido!"))
+  .catch((err) => console.error("❌ Falha ao logar:", err));
