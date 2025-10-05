@@ -29,7 +29,7 @@ function horaBrasilia() {
 }
 
 // --- Bot pronto ---
-client.once("ready", () => {
+client.once("clientReady", () => {
   console.log(`✅ Logado como ${client.user.tag}`);
 });
 
@@ -46,7 +46,7 @@ client.on("interactionCreate", async (interaction) => {
   }
 });
 
-// --- Repost anônimo ---
+// --- Repost anônimo com anexos corrigidos ---
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
 
@@ -56,21 +56,23 @@ client.on("messageCreate", async (message) => {
     if (ref && ref.author.id === client.user.id) return;
   }
 
-  // Substitui apenas a menção ao próprio bot
+  // Remove menção ao próprio bot
   const cleanContent = message.content.replace(new RegExp(`<@!?${client.user.id}>`, "g"), "").trim();
 
-  // Cria attachments corretamente
+  // Converte anexos para AttachmentBuilder
   const files = message.attachments.map(a => new AttachmentBuilder(a.url, { name: a.name }));
 
-  const apenasMencaoEAnexo = message.mentions.has(client.user) && !cleanContent && files.length > 0;
-  const apenasMencaoSemAnexo = message.mentions.has(client.user) && !cleanContent && files.length === 0;
+  const apenasMencaoEAnexo =
+    message.mentions.has(client.user) && !cleanContent && files.length > 0;
+  const apenasMencaoSemAnexo =
+    message.mentions.has(client.user) && !cleanContent && files.length === 0;
 
   if (apenasMencaoSemAnexo) return;
 
   if (message.mentions.has(client.user)) {
     await message.delete().catch(() => {});
 
-    // Envia no canal original
+    // Repost da mensagem no canal original
     if (cleanContent) {
       const embed = new EmbedBuilder().setDescription(cleanContent);
       await message.channel.send({
@@ -85,7 +87,7 @@ client.on("messageCreate", async (message) => {
       });
     }
 
-    // Envia para canal de log, se definido
+    // Registro no canal de log, se configurado
     if (logChannelId) {
       const logChannel = message.guild.channels.cache.get(logChannelId);
       if (logChannel) {
