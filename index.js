@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Partials, EmbedBuilder, REST, Routes, SlashCommandBuilder } from "discord.js";
+import { Client, GatewayIntentBits, Partials, EmbedBuilder, REST, Routes } from "discord.js";
 import express from "express";
 import dotenv from "dotenv";
 
@@ -15,9 +15,11 @@ if (!TOKEN || !CLIENT_ID) {
 
 console.log("✅ Variáveis de ambiente carregadas corretamente.");
 
+// --- Variáveis de canal ---
 let logChannelId = null;
-let defaultLogChannelId = null; // Novo canal monitorado
+let defaultLogChannelId = null;
 
+// --- Inicialização do cliente ---
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -30,6 +32,7 @@ const client = new Client({
 // --- Logs e servidor HTTP mínimo ---
 client.on("error", console.error);
 client.on("warn", console.warn);
+client.on("debug", console.log);
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -43,35 +46,40 @@ function horaBrasilia() {
   });
 }
 
-// --- Função para registrar comandos dinamicamente ---
+// --- Registro dinâmico dos comandos slash ---
+const commands = [
+  {
+    name: "setlog",
+    description: "Define o canal de log principal",
+    options: [
+      {
+        name: "canal",
+        description: "Canal para registrar logs",
+        type: 7, // CHANNEL
+        required: true
+      }
+    ]
+  },
+  {
+    name: "set_defaultlog",
+    description: "Define o canal de log secundário (monitoramento de mensagens deletadas)",
+    options: [
+      {
+        name: "canal",
+        description: "Canal para monitorar mensagens deletadas",
+        type: 7,
+        required: true
+      }
+    ]
+  }
+];
+
+const rest = new REST({ version: "10" }).setToken(TOKEN);
+
 async function registrarComandos() {
-  const commands = [
-    new SlashCommandBuilder()
-      .setName("setlog")
-      .setDescription("Define o canal de log do bot")
-      .addChannelOption(option =>
-        option.setName("canal")
-              .setDescription("Escolha o canal de log")
-              .setRequired(true)
-      ),
-    new SlashCommandBuilder()
-      .setName("set_defaultlog")
-      .setDescription("Define o canal secundário para monitorar mensagens deletadas")
-      .addChannelOption(option =>
-        option.setName("canal")
-              .setDescription("Canal a ser monitorado quando uma mensagem for deletada")
-              .setRequired(true)
-      )
-  ].map(cmd => cmd.toJSON());
-
-  const rest = new REST({ version: "10" }).setToken(TOKEN);
-
   try {
-    console.log("🔄 Registrando comandos slash globalmente...");
-    await rest.put(
-      Routes.applicationCommands(CLIENT_ID),
-      { body: commands }
-    );
+    console.log("📦 Registrando comandos...");
+    await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
     console.log("✅ Comandos registrados com sucesso!");
   } catch (err) {
     console.error("❌ Erro ao registrar comandos:", err);
@@ -81,15 +89,20 @@ async function registrarComandos() {
 // --- Evento ready ---
 client.once("ready", async () => {
   console.log(`✅ Logado como ${client.user.tag}`);
-  await registrarComandos(); // registra comandos no boot
+  await registrarComandos();
 });
 
-// --- Slash command /setlog e /set_defaultlog ---
+// --- Comandos /setlog e /set_defaultlog ---
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isCommand()) return;
 
+  const canal = interaction.options.getChannel("canal");
+  if (!canal) {
+    await interaction.reply({ content: "❌ Canal inválido.", ephemeral: true });
+    return;
+  }
+
   if (interaction.commandName === "setlog") {
-    const canal = interaction.options.getChannel("canal");
     logChannelId = canal.id;
     await interaction.reply({
       content: `Canal de log definido com sucesso para ${canal}!`,
@@ -98,24 +111,23 @@ client.on("interactionCreate", async (interaction) => {
   }
 
   if (interaction.commandName === "set_defaultlog") {
-    const canal = interaction.options.getChannel("canal");
     defaultLogChannelId = canal.id;
     await interaction.reply({
-      content: `Canal padrão de monitoramento definido com sucesso para ${canal}!`,
+      content: `Canal de log secundário definido com sucesso para ${canal}!`,
       ephemeral: true
     });
   }
 });
 
-// --- Função para baixar anexos via fetch nativo ---
+// --- Função para baixar anexos via fetch ---
 async function baixarAnexos(message) {
-  return Promise.all(
-    message.attachments.map(async a => {
-      const response = await fetch(a.url);
-      const arrayBuffer = await response.arrayBuffer();
-      return { attachment: Buffer.from(arrayBuffer), name: a.name };
-    })
-  );
+  const arquivos = [];
+  for (const [, a] of message.attachments) {
+    const response = await fetch(a.url);
+    const arrayBuffer = await response.arrayBuffer();
+    arquivos.push({ attachment: Buffer.from(arrayBuffer), name: a.name });
+  }
+  return arquivos;
 }
 
 // --- Repost anônimo com +leca e preservando replies ---
@@ -125,9 +137,9 @@ client.on("messageCreate", async (message) => {
 
   const cleanContent = message.content.slice(5).trim();
   const files = await baixarAnexos(message);
+
   if (!cleanContent && files.length === 0) return;
 
-  // Preserva referência se for reply
   let referenceId = undefined;
   if (message.reference) {
     const refMsg = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
@@ -140,15 +152,16 @@ client.on("messageCreate", async (message) => {
     content: "sua mensagem foi escondida 💕",
     embeds: cleanContent ? [new EmbedBuilder().setDescription(cleanContent)] : undefined,
     files: files.length > 0 ? files : undefined,
-    reply: referenceId ? { messageReference: referenceId } : undefined
+    messageReference: referenceId ? { message_id: referenceId } : undefined
   };
 
-  const sentMessage = await message.channel.send(sendData);
+  await message.channel.send(sendData);
 
   if (logChannelId) {
     const logChannel = message.guild.channels.cache.get(logChannelId);
     if (logChannel) {
       const descricao = cleanContent || "* (postagem sem descrição)*";
+
       const embed = new EmbedBuilder()
         .setDescription(`**mensagem:** ${descricao}`)
         .setFooter({
@@ -159,7 +172,7 @@ client.on("messageCreate", async (message) => {
         content: "Registro de Auditoria 💕",
         embeds: [embed],
         files: files.length > 0 ? files : undefined,
-        reply: referenceId ? { messageReference: referenceId } : undefined
+        messageReference: referenceId ? { message_id: referenceId } : undefined
       });
     }
   }
@@ -168,18 +181,30 @@ client.on("messageCreate", async (message) => {
 // --- Monitoramento quando a Leca apaga mensagens ---
 client.on("messageDelete", async (deletedMessage) => {
   try {
-    // Só reage se foi o próprio bot quem apagou
-    if (!deletedMessage.client.user) return;
     if (deletedMessage.client.user.id !== client.user.id) return;
     if (!defaultLogChannelId) return;
 
     const monitorChannel = deletedMessage.guild.channels.cache.get(defaultLogChannelId);
     if (!monitorChannel) return;
 
-    // Aguarda uma mensagem contendo "Mensagem de texto deletada"
     const collector = monitorChannel.createMessageCollector({
-      filter: msg => msg.content.includes("Mensagem de texto deletada"),
-      time: 15000, // aguarda até 15 segundos
+      filter: msg => {
+        if (msg.author.bot && msg.author.id !== client.user.id) return false;
+
+        const inContent = msg.content && msg.content.includes("Mensagem de texto deletada");
+
+        const inEmbeds = msg.embeds?.some(e =>
+          (e.title && e.title.includes("Mensagem de texto deletada")) ||
+          (e.description && e.description.includes("Mensagem de texto deletada")) ||
+          (e.fields && e.fields.some(f =>
+            f.name.includes("Mensagem de texto deletada") ||
+            f.value.includes("Mensagem de texto deletada")
+          ))
+        );
+
+        return inContent || inEmbeds;
+      },
+      time: 15000,
       max: 1
     });
 
