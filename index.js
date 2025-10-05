@@ -29,6 +29,11 @@ const client = new Client({
   partials: [Partials.Message, Partials.Channel]
 });
 
+// --- Logs de debug e erros ---
+client.on("error", err => console.error("❌ Evento de erro:", err));
+client.on("warn", warn => console.warn("⚠️ Aviso:", warn));
+client.on("debug", info => console.log("ℹ️ Debug:", info)); // opcional, muito verboso
+
 // --- Servidor HTTP mínimo para Render ---
 const app = express();
 const port = process.env.PORT || 3000;
@@ -121,8 +126,6 @@ client.on("messageCreate", async (message) => {
 });
 
 // --- Login com catch de erros ---
-client.login(TOKEN).then(() => {
-  console.log("🔑 Tentativa de login enviada ao Discord...");
-}).catch(err => {
-  console.error("❌ Falha ao logar no Discord:", err);
-});
+client.login(TOKEN)
+  .then(() => console.log("🔑 Tentativa de login enviada ao Discord..."))
+  .catch(err => console.error("❌ Falha ao logar no Discord:", err));
