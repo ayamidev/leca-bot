@@ -79,6 +79,7 @@ async function registrarLog(message, conteudo, arquivos) {
   });
 }
 
+// === FUNÇÃO DE REPOST ANONIMO ===
 async function repostarAnonimamente(message) {
   if (message.author.bot) return;
 
@@ -89,18 +90,6 @@ async function repostarAnonimamente(message) {
 
   // Só processa se mencionou o bot, sozinho ou junto de everyone/here
   if (!mentionedBot && !(mentionedBot && (mentionedEveryone || mentionedHere))) return;
-
-  // Checa se é reply a mensagem da Leca → não processa
-  let isReplyToLeca = false;
-  if (message.reference) {
-    const repliedMessage = await message.channel.messages
-      .fetch(message.reference.messageId)
-      .catch(() => null);
-    if (repliedMessage?.author?.id === client.user.id) {
-      isReplyToLeca = true;
-    }
-  }
-  if (isReplyToLeca) return;
 
   // Remove menção ao bot do conteúdo
   const cleanContent = message.content
@@ -113,7 +102,7 @@ async function repostarAnonimamente(message) {
   // Caso não tenha nem texto nem anexos, não repostar
   if (!cleanContent && files.length === 0) return;
 
-  // Detecta se é reply a outra mensagem (não da Leca)
+  // Detecta se é reply a outra mensagem
   let replyTo = null;
   if (message.reference) {
     replyTo = await message.channel.messages
