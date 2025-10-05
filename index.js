@@ -16,6 +16,7 @@ if (!TOKEN || !CLIENT_ID) {
 console.log("✅ Variáveis de ambiente carregadas corretamente.");
 
 let logChannelId = null;
+let defaultLogChannelId = null; // Novo canal monitorado
 
 const client = new Client({
   intents: [
@@ -29,7 +30,6 @@ const client = new Client({
 // --- Logs e servidor HTTP mínimo ---
 client.on("error", console.error);
 client.on("warn", console.warn);
-client.on("debug", console.log);
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -52,6 +52,14 @@ async function registrarComandos() {
       .addChannelOption(option =>
         option.setName("canal")
               .setDescription("Escolha o canal de log")
+              .setRequired(true)
+      ),
+    new SlashCommandBuilder()
+      .setName("set_defaultlog")
+      .setDescription("Define o canal secundário para monitorar mensagens deletadas")
+      .addChannelOption(option =>
+        option.setName("canal")
+              .setDescription("Canal a ser monitorado quando uma mensagem for deletada")
               .setRequired(true)
       )
   ].map(cmd => cmd.toJSON());
@@ -76,20 +84,24 @@ client.once("ready", async () => {
   await registrarComandos(); // registra comandos no boot
 });
 
-// --- Slash command /setlog ---
+// --- Slash command /setlog e /set_defaultlog ---
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isCommand()) return;
 
   if (interaction.commandName === "setlog") {
     const canal = interaction.options.getChannel("canal");
-    if (!canal) {
-      await interaction.reply({ content: "❌ Canal inválido.", ephemeral: true });
-      return;
-    }
-
     logChannelId = canal.id;
     await interaction.reply({
       content: `Canal de log definido com sucesso para ${canal}!`,
+      ephemeral: true
+    });
+  }
+
+  if (interaction.commandName === "set_defaultlog") {
+    const canal = interaction.options.getChannel("canal");
+    defaultLogChannelId = canal.id;
+    await interaction.reply({
+      content: `Canal padrão de monitoramento definido com sucesso para ${canal}!`,
       ephemeral: true
     });
   }
@@ -109,28 +121,21 @@ async function baixarAnexos(message) {
 // --- Repost anônimo com +leca e preservando replies ---
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
-
-  // Mensagens que não começam com +leca são ignoradas
   if (!message.content.toLowerCase().startsWith("+leca")) return;
 
-  const cleanContent = message.content.slice(5).trim(); // remove +leca
+  const cleanContent = message.content.slice(5).trim();
   const files = await baixarAnexos(message);
-
   if (!cleanContent && files.length === 0) return;
 
   // Preserva referência se for reply
   let referenceId = undefined;
   if (message.reference) {
     const refMsg = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
-    if (refMsg) {
-      referenceId = refMsg.id; // ID da mensagem original que será usada em messageReference
-    }
+    if (refMsg) referenceId = refMsg.id;
   }
 
-  // Deleta mensagem original
   await message.delete().catch(() => {});
 
-  // Prepara envio
   const sendData = {
     content: "sua mensagem foi escondida 💕",
     embeds: cleanContent ? [new EmbedBuilder().setDescription(cleanContent)] : undefined,
@@ -140,27 +145,51 @@ client.on("messageCreate", async (message) => {
 
   const sentMessage = await message.channel.send(sendData);
 
-  // Registro no canal de log
   if (logChannelId) {
     const logChannel = message.guild.channels.cache.get(logChannelId);
     if (logChannel) {
       const descricao = cleanContent || "* (postagem sem descrição)*";
-
       const embed = new EmbedBuilder()
         .setDescription(`**mensagem:** ${descricao}`)
         .setFooter({
           text: `publicado por: ${message.author.tag} | (${message.author.id})\nem: #${message.channel.name} | ${horaBrasilia()}`
         });
 
-      const logData = {
+      await logChannel.send({
         content: "Registro de Auditoria 💕",
         embeds: [embed],
         files: files.length > 0 ? files : undefined,
         reply: referenceId ? { messageReference: referenceId } : undefined
-      };
-
-      await logChannel.send(logData);
+      });
     }
+  }
+});
+
+// --- Monitoramento quando a Leca apaga mensagens ---
+client.on("messageDelete", async (deletedMessage) => {
+  try {
+    // Só reage se foi o próprio bot quem apagou
+    if (!deletedMessage.client.user) return;
+    if (deletedMessage.client.user.id !== client.user.id) return;
+    if (!defaultLogChannelId) return;
+
+    const monitorChannel = deletedMessage.guild.channels.cache.get(defaultLogChannelId);
+    if (!monitorChannel) return;
+
+    // Aguarda uma mensagem contendo "Mensagem de texto deletada"
+    const collector = monitorChannel.createMessageCollector({
+      filter: msg => msg.content.includes("Mensagem de texto deletada"),
+      time: 15000, // aguarda até 15 segundos
+      max: 1
+    });
+
+    collector.on("collect", async (msg) => {
+      await msg.delete().catch(() => {});
+      console.log(`🧹 Aviso de exclusão removido automaticamente em #${monitorChannel.name}`);
+    });
+
+  } catch (err) {
+    console.error("Erro ao monitorar exclusão:", err);
   }
 });
 
