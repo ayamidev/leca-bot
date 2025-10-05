@@ -51,7 +51,10 @@ client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
 
   // ignora respostas a mensagens do próprio bot
-  if (message.reference) return;
+  if (message.reference) {
+    const ref = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
+    if (ref && ref.author.id === client.user.id) return; // ignora apenas se for resposta ao bot
+  }
 
   const cleanContent = message.content.replace(/<@!?(\d+)>/g, "").trim();
   const files = message.attachments.map(a => a.url);
