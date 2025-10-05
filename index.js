@@ -3,7 +3,6 @@ require("dotenv").config();
 const express = require("express");
 
 const TOKEN = process.env.TOKEN;
-const BOT_NAME = "leca"; // Nome do bot para detectar menção direta
 let logChannelId = null;
 
 const client = new Client({
@@ -57,49 +56,53 @@ client.on("messageCreate", async (message) => {
     if (ref && ref.author.id === client.user.id) return;
   }
 
-  const contentLower = message.content.toLowerCase();
-  if (!contentLower.includes(`@${BOT_NAME}`)) return; // só reage se mencionar "@leca"
+  // Substitui apenas a menção ao próprio bot
+  const cleanContent = message.content.replace(new RegExp(`<@!?${client.user.id}>`, "g"), "").trim();
 
-  // remove a menção do conteúdo
-  const cleanContent = message.content.replace(new RegExp(`@${BOT_NAME}`, "gi"), "").trim();
-
-  // converte anexos para AttachmentBuilder
+  // Cria attachments corretamente
   const files = message.attachments.map(a => new AttachmentBuilder(a.url, { name: a.name }));
 
-  if (!cleanContent && files.length === 0) return; // nada a fazer
+  const apenasMencaoEAnexo = message.mentions.has(client.user) && !cleanContent && files.length > 0;
+  const apenasMencaoSemAnexo = message.mentions.has(client.user) && !cleanContent && files.length === 0;
 
-  await message.delete().catch(() => {});
+  if (apenasMencaoSemAnexo) return;
 
-  if (cleanContent) {
-    const embed = new EmbedBuilder().setDescription(cleanContent);
-    await message.channel.send({
-      content: "sua mensagem foi escondida 💕",
-      embeds: [embed],
-      files: files.length > 0 ? files : undefined
-    });
-  } else {
-    await message.channel.send({
-      content: "sua mensagem foi escondida 💕",
-      files
-    });
-  }
+  if (message.mentions.has(client.user)) {
+    await message.delete().catch(() => {});
 
-  // log no canal definido
-  if (logChannelId) {
-    const logChannel = message.guild.channels.cache.get(logChannelId);
-    if (logChannel) {
-      const descricao = cleanContent || "* (postagem sem descrição)*";
-      const embed = new EmbedBuilder()
-        .setDescription(`**mensagem:** ${descricao}`)
-        .setFooter({
-          text: `publicado por: ${message.author.tag} | (${message.author.id})\nem: #${message.channel.name} | ${horaBrasilia()}`
-        });
-
-      await logChannel.send({
-        content: "Registro de Auditoria 💕",
+    // Envia no canal original
+    if (cleanContent) {
+      const embed = new EmbedBuilder().setDescription(cleanContent);
+      await message.channel.send({
+        content: "sua mensagem foi escondida 💕",
         embeds: [embed],
         files: files.length > 0 ? files : undefined
       });
+    } else {
+      await message.channel.send({
+        content: "sua mensagem foi escondida 💕",
+        files
+      });
+    }
+
+    // Envia para canal de log, se definido
+    if (logChannelId) {
+      const logChannel = message.guild.channels.cache.get(logChannelId);
+      if (logChannel) {
+        const descricao = cleanContent || "* (postagem sem descrição)*";
+
+        const embed = new EmbedBuilder()
+          .setDescription(`**mensagem:** ${descricao}`)
+          .setFooter({
+            text: `publicado por: ${message.author.tag} | (${message.author.id})\nem: #${message.channel.name} | ${horaBrasilia()}`
+          });
+
+        await logChannel.send({
+          content: "Registro de Auditoria 💕",
+          embeds: [embed],
+          files: files.length > 0 ? files : undefined
+        });
+      }
     }
   }
 });
