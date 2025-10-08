@@ -1,16 +1,25 @@
+import { Server } from "../models/Server.js";
 import { EmbedBuilder } from "discord.js";
-import { baixarAnexos } from "../utils/attachments.js";
-import { horaBrasilia } from "../utils/time.js";
-import { config } from "../config.js";
+import fetch from "node-fetch";
 
+// Supondo que esta seja a função que processa o +leca
 export async function onMessageAnon(message, client) {
-  if (message.author.bot || !message.content.toLowerCase().startsWith("+leca")) return;
+  if (message.author.bot) return;
+  if (!message.content.toLowerCase().startsWith("+leca")) return;
 
   const cleanContent = message.content.slice(5).trim();
-  const files = await baixarAnexos(message);
+
+  // Baixar anexos
+  const files = [];
+  for (const [, a] of message.attachments) {
+    const response = await fetch(a.url);
+    const arrayBuffer = await response.arrayBuffer();
+    files.push({ attachment: Buffer.from(arrayBuffer), name: a.name });
+  }
+
   if (!cleanContent && files.length === 0) return;
 
-  // Preservar replies
+  // Preservar reply
   let replyOptions = {};
   if (message.reference) {
     const refMsg = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
@@ -18,24 +27,30 @@ export async function onMessageAnon(message, client) {
   }
 
   await message.delete().catch(() => {});
-  await message.channel.send({
+
+  // Repost da mensagem
+  const sendData = {
     content: "sua mensagem foi escondida 💕",
     embeds: cleanContent ? [new EmbedBuilder().setDescription(cleanContent)] : undefined,
     files: files.length > 0 ? files : undefined,
     ...replyOptions
-  });
+  };
 
-  // Log
-  const { logChannelId } = config;
-  if (!logChannelId) return;
+  await message.channel.send(sendData);
 
-  const logChannel = message.guild.channels.cache.get(logChannelId);
+  // --- PEGAR OS CANAIS DO BANCO ---
+  const server = await Server.findOne({ guildId: message.guild.id });
+  if (!server || !server.channels.logChannelId) return; // Se não tiver log definido, não faz nada
+
+  const logChannel = message.guild.channels.cache.get(server.channels.logChannelId);
   if (!logChannel) return;
 
+  const descricao = cleanContent || "* (postagem sem descrição)*";
+
   const embed = new EmbedBuilder()
-    .setDescription(`**mensagem:** ${cleanContent || "* (sem descrição)*"}`)
+    .setDescription(`**mensagem:** ${descricao}`)
     .setFooter({
-      text: `publicado por: ${message.author.tag} (${message.author.id})\n#${message.channel.name} | ${horaBrasilia()}`
+      text: `publicado por: ${message.author.tag} | (${message.author.id})\nem: #${message.channel.name} | ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", hour12: false })}`
     });
 
   await logChannel.send({

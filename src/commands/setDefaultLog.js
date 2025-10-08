@@ -1,24 +1,18 @@
-import { config } from "../config.js";
+import { Server } from "../models/Server.js";
 
 export async function handleSetDefaultLog(interaction) {
-  // Apenas administradores
   if (!interaction.member.permissions.has("Administrator")) {
-    await interaction.reply({
-      content: "❌ Apenas administradores podem usar este comando.",
-      ephemeral: true
-    });
-    return;
+    return interaction.reply({ content: "❌ Apenas administradores.", ephemeral: true });
   }
 
   const canal = interaction.options.getChannel("canal");
-  if (!canal) {
-    await interaction.reply({ content: "❌ Canal inválido.", ephemeral: true });
-    return;
-  }
+  if (!canal) return interaction.reply({ content: "❌ Canal inválido.", ephemeral: true });
 
-  config.defaultLogChannelId = canal.id;
-  await interaction.reply({
-    content: `Canal de log secundário definido com sucesso para ${canal}!`,
-    ephemeral: true
-  });
+  await Server.findOneAndUpdate(
+    { guildId: interaction.guild.id },
+    { $set: { "channels.defaultLogChannelId": canal.id } },
+    { upsert: true, new: true }
+  );
+
+  await interaction.reply({ content: `Canal de monitoramento definido para ${canal}`, ephemeral: true });
 }

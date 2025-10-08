@@ -11,18 +11,30 @@ export const commands = [
   },
   {
     name: "set_defaultlog",
-    description: "Define o canal de log original, usado pela Loritta por exemplo (monitoramento +leca)",
+    description: "Define o canal de log original, usado pela Loritta por exemplo (monitoramento do +leca)",
     options: [{ name: "canal", description: "Canal para monitorar", type: 7, required: true }]
   },
   {
-    name: "excluir_papinho_furado",
-    description: "Exclui mensagens sem anexos do canal atual",
+    name: "purge",
+    description: "Gerencia exclusão de mensagens",
     options: [
       {
-        name: "quantidade",
-        description: "Quantidade de mensagens sem mídia a excluir (opcional)",
-        type: 4, // INTEGER
-        required: false
+        name: "papinhos",
+        description: "Excluir quantidade definida de mensagens sem mídia/anexos",
+        type: 1, // SUB_COMMAND
+        options: [
+          {
+            name: "quantidade",
+            description: "Quantidade de mensagens sem mídia a excluir",
+            type: 4, // INTEGER
+            required: true
+          }
+        ]
+      },
+      {
+        name: "all_papinhos",
+        description: "Excluir todas as mensagens sem mídia/anexos",
+        type: 1 // SUB_COMMAND
       }
     ]
   },

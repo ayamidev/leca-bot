@@ -3,24 +3,38 @@ import { config } from "./config.js";
 import { onReady } from "./events/ready.js";
 import { onMessageAnon } from "./events/messageAnon.js";
 import { onMonitorLog } from "./events/monitorLog.js";
+
+// Comandos
 import { handleSetLog } from "./commands/setlog.js";
 import { handleSetDefaultLog } from "./commands/setDefaultLog.js";
-import { handleExcluirPapinhoFurado } from "./commands/excluirPapinhoFurado.js";
 import { handleLeca } from "./commands/leca.js";
+import { handlePurgePapinhos } from "./commands/purgePapinhos.js";
+import { handlePurgeAllPapinhos } from "./commands/purgeAllPapinhos.js";
 
-// Evento de inicialização
+// --- Evento de inicialização ---
 client.once("ready", () => onReady(client));
 
-// Evento de comandos slash
+// --- Mapeamento de comandos ---
+const commandMap = {
+  setlog: handleSetLog,
+  set_defaultlog: handleSetDefaultLog,
+  leca: handleLeca,
+  purge: async (interaction) => {
+    // Subcomandos
+    const sub = interaction.options.getSubcommand();
+    if (sub === "papinhos") await handlePurgePapinhos(interaction);
+    else if (sub === "all_papinhos") await handlePurgeAllPapinhos(interaction);
+    else
+      await interaction.reply({
+        content: "❌ Subcomando inválido.",
+        ephemeral: true
+      });
+  }
+};
+
+// --- Evento de comandos slash ---
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isCommand()) return;
-
-  const commandMap = {
-    setlog: handleSetLog,
-    set_defaultlog: handleSetDefaultLog,
-    excluir_papinho_furado: handleExcluirPapinhoFurado,
-    leca: handleLeca
-  };
 
   const handler = commandMap[interaction.commandName];
   if (handler) {
@@ -35,13 +49,13 @@ client.on("interactionCreate", async (interaction) => {
   }
 });
 
-// Eventos de mensagens
+// --- Eventos de mensagens ---
 client.on("messageCreate", async (message) => {
   await onMessageAnon(message, client);
   await onMonitorLog(message, client);
 });
 
-// Login no Discord
+// --- Login no Discord ---
 client.login(config.TOKEN)
   .then(() => console.log("🔑 Login enviado ao Discord..."))
   .catch(err => console.error("❌ Falha ao logar:", err));

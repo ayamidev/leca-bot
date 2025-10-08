@@ -12,6 +12,5 @@ export const config = {
   TOKEN,
   CLIENT_ID,
   PORT: PORT || 3000,
-  logChannelId: null,
-  defaultLogChannelId: null
+  MONGO_URI: process.env.MONGO_URI
 };
