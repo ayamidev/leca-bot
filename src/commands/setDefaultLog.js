@@ -1,4 +1,4 @@
-import { Server } from "../models/Server.js";
+import { Server } from "../models/server.js";
 
 export async function handleSetDefaultLog(interaction) {
   if (!interaction.member.permissions.has("Administrator")) {
