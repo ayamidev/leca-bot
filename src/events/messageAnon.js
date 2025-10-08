@@ -1,4 +1,4 @@
-import { Server } from "../models/Server.js";
+import { Server } from "../models/server.js";
 import { EmbedBuilder } from "discord.js";
 import fetch from "node-fetch";
 
