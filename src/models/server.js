@@ -5,8 +5,8 @@ const serverSchema = new mongoose.Schema({
   channels: {
     logChannelId: { type: String, default: null },
     defaultLogChannelId: { type: String, default: null },
-    // Você pode adicionar novos canais no futuro aqui
-  }
+  },
+  moedaNome: { type: String, default: "lecash" } // nome da moeda
 }, { timestamps: true });
 
 export const Server = mongoose.model("Server", serverSchema);
