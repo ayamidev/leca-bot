@@ -1,5 +1,3 @@
-import { EmbedBuilder } from "discord.js";
-
 export async function handleLeca(interaction) {
   if (!interaction.member.permissions.has("Administrator")) {
     await interaction.reply({
